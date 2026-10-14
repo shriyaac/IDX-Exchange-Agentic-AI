@@ -51,7 +51,7 @@ Same parts and connections, but sealed inside Docker: only the gateway can reach
 ### Architecture flow: one question, start to finish
 
 1. The user sends a question to their own WhatsApp chat.
-2. The gateway checks that the message comes from an approved number (the allowlist), then opens this chat's history (the `main` session).
+2. The gateway checks that the message comes from an approved number, then opens this chat's history.
 3. The agent loop builds a package for Gemini: the agent's instructions, the list of skills it can use, what it remembers about the user, and the chat so far.
 4. Gemini picks the matching skill and replies with a tool call (a request to run a task) instead of an answer.
 5. The gateway runs the tool.
@@ -69,4 +69,4 @@ I ran it in **Docker** instead, as a sandbox, because an AI agent can run comman
 - **Three containers:** `openclaw-gateway` (the agent), `mysql` (MariaDB with the MLS data) and a small one-time helper that sets file permissions.
 - **Extra safeguards:** the database is on an internal network with no internet access, the agent's database login is read-only, secrets stay in a `.env` file that is never committed, and the dashboard only accepts connections from the Mac itself.
 - **What Docker doesn't protect:** connected accounts. The agent can still use whatever it's given (the Gemini key, the linked WhatsApp), which is why WhatsApp is locked to the owner's number.
-- **Why MariaDB:** the MLS `.sql` files were exported from MariaDB, so the same database is used to avoid import problems. It works exactly like MySQL for this project.
+- **Why MariaDB:** the MLS `.sql` files were exported from MariaDB, so the same database is used to avoid import problems.
