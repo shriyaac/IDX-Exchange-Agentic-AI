@@ -1,0 +1,153 @@
+# IDX Exchange internship — OpenClaw + database, sandboxed in Docker
+# Lives in:  ~/IDXExchange/openclaw-docker
+#
+# What lives where:
+#   ../*.sql           -> the three MLS dumps in ~/IDXExchange (read-only, imported on first start)
+#   ./workspace        -> YOUR code (Mac folder), seen by the agent as /home/node/projects
+#   openclaw-state     -> Docker volume: OpenClaw config, memory, agent files, WhatsApp session
+#   openclaw-secrets   -> Docker volume: OpenClaw's saved credentials
+#   (OpenClaw's own files live in Docker volumes because its file-safety checks reject
+#    Docker Desktop's shared Mac folders with an "unsafe workspace file" error.)
+#
+# The agent can NOT see the rest of your Mac (Documents, Desktop, ~/.ssh, etc.).
+
+services:
+  openclaw-gateway:
+    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}   # prebuilt; no 6GB local build
+    environment:
+      HOME: /home/node
+      OPENCLAW_HOME: /home/node
+      OPENCLAW_STATE_DIR: /home/node/.openclaw
+      OPENCLAW_CONFIG_PATH: /home/node/.openclaw/openclaw.json
+      OPENCLAW_CONFIG_DIR: /home/node/.openclaw
+      OPENCLAW_WORKSPACE_DIR: /home/node/.openclaw/workspace
+      OPENCLAW_GATEWAY_PORT: "18789"
+      # Only these values from .env reach the agent. MYSQL_ROOT_PASSWORD is deliberately NOT here.
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-}
+      MYSQL_USER: ${MYSQL_USER:-}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-idx_exchange}
+      EMAIL_USER: ${EMAIL_USER:-}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD:-}
+      TERM: xterm-256color
+      TZ: America/Los_Angeles
+      # Inside Docker the database is reached by its service name, not "localhost"
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+    volumes:
+      - openclaw-state:/home/node/.openclaw            # Docker volume (not a Mac folder, see note at top)
+      - openclaw-secrets:/home/node/.config/openclaw   # Docker volume
+      - ./workspace:/home/node/projects                # YOUR code folder on the Mac
+      # NEVER mount /var/run/docker.sock here — that hands the agent control of Docker
+      # (and effectively root on the Docker VM), which defeats the whole sandbox.
+    ports:
+      # 127.0.0.1 = only your own Mac can open the dashboard, not others on your Wi-Fi
+      - "127.0.0.1:18789:18789"
+    networks: [internet, backend]
+    # --- hardening ---
+    user: "node"                      # non-root inside the container
+    cap_drop: [ALL]                   # no special Linux privileges
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 512                   # stops runaway process spawning
+    mem_limit: 2g
+    cpus: 2
+    init: true
+    restart: unless-stopped
+    command: ["node", "dist/index.js", "gateway", "--bind", "lan", "--port", "18789"]
+    depends_on:
+      volume-perms:
+        condition: service_completed_successfully
+
+  # Tiny helper that runs (and exits) before OpenClaw starts: makes the two Docker
+  # volumes owned by OpenClaw's non-root "node" user. Same fix OpenClaw's official setup uses.
+  volume-perms:
+    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
+    user: root
+    entrypoint: ["/usr/bin/chown", "-R", "node:node", "/home/node/.openclaw", "/home/node/.config/openclaw"]
+    volumes:
+      - openclaw-state:/home/node/.openclaw
+      - openclaw-secrets:/home/node/.config/openclaw
+    network_mode: none
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_READ_SEARCH]   # only what's needed to change file owners
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+
+  # One-off CLI container for onboarding, channel login, status, etc.
+  #   docker compose run --rm openclaw-cli <command>
+  openclaw-cli:
+    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
+    profiles: ["cli"]                 # not started by "docker compose up"
+    network_mode: "service:openclaw-gateway"
+    environment:
+      HOME: /home/node
+      OPENCLAW_HOME: /home/node
+      OPENCLAW_STATE_DIR: /home/node/.openclaw
+      OPENCLAW_CONFIG_PATH: /home/node/.openclaw/openclaw.json
+      OPENCLAW_CONFIG_DIR: /home/node/.openclaw
+      OPENCLAW_WORKSPACE_DIR: /home/node/.openclaw/workspace
+      OPENCLAW_GATEWAY_PORT: "18789"
+      # Only these values from .env reach the agent. MYSQL_ROOT_PASSWORD is deliberately NOT here.
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-}
+      MYSQL_USER: ${MYSQL_USER:-}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-idx_exchange}
+      EMAIL_USER: ${EMAIL_USER:-}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD:-}
+      BROWSER: echo
+      TERM: xterm-256color
+    volumes:
+      - openclaw-state:/home/node/.openclaw            # Docker volume (not a Mac folder, see note at top)
+      - openclaw-secrets:/home/node/.config/openclaw   # Docker volume
+      - ./workspace:/home/node/projects                # YOUR code folder on the Mac
+    user: "node"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    stdin_open: true
+    tty: true
+    init: true
+    entrypoint: ["node", "dist/index.js"]
+    depends_on: [openclaw-gateway]
+
+  # The database. It's MariaDB (a drop-in MySQL replacement) because IDX exported the
+  # .sql files from MariaDB. Your code still talks to it exactly like MySQL.
+  mysql:
+    image: mariadb:10.11
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MARIADB_DATABASE: idx_exchange
+      MYSQL_USER_FOR_AGENT: ${MYSQL_USER}         # used by mysql-init/99_agent_user.sh
+      MYSQL_PASSWORD_FOR_AGENT: ${MYSQL_PASSWORD}
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    volumes:
+      - mysql-data:/var/lib/mysql
+      # Imported once, on the very first start, in this order:
+      - ../../rets_property.sql:/docker-entrypoint-initdb.d/01_rets_property.sql:ro
+      - ../../california_sold.sql:/docker-entrypoint-initdb.d/02_california_sold.sql:ro
+      - ../../rets_openhouse.sql:/docker-entrypoint-initdb.d/03_rets_openhouse.sql:ro
+      - ./mysql-init/99_agent_user.sh:/docker-entrypoint-initdb.d/99_agent_user.sh:ro
+    networks: [backend]               # no internet access, not reachable from your Mac
+    # Want to connect from your Mac (TablePlus, Python scripts)? Uncomment BOTH:
+    # ports: ["127.0.0.1:3307:3306"]
+    # networks: [backend, internet]
+    mem_limit: 2g
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+networks:
+  internet: {}                        # normal outbound (Gemini API, WhatsApp)
+  backend:
+    internal: true                    # container-to-container only
+
+volumes:
+  mysql-data:
+  openclaw-state:
+  openclaw-secrets:

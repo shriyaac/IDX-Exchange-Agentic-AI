@@ -1,0 +1,12 @@
+# Secrets
+.env
+# MLS data (confidential, and too big for GitHub)
+*.sql
+*.sql.gz
+# Downloaded libraries (reinstall with: npm install)
+node_modules/
+# OpenClaw leftovers and logs
+openclaw-docker/openclaw-state/
+openclaw-docker/openclaw-secrets/
+mysql-log.txt
+.DS_Store

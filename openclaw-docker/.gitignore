@@ -1,0 +1,5 @@
+.env
+openclaw-state/
+openclaw-secrets/
+mysql-init/*.sql
+mysql-init/*.sql.gz
