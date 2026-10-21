@@ -67,7 +67,7 @@ export function formatListingCard(l) {
   return [
     `${l.L_Address ?? "(address not listed)"}, ${l.L_City} ${l.L_Zip ?? ""}`.trim(),
     `${money(l.price)} | ${num(l.beds)} bd / ${num(l.baths)} ba | ${num(l.sqft)} sq ft | ${pretty(l.type)}`,
-    `${num(l.DaysOnMarket)} days on market${extras ? " | " + extras : ""} | MLS# ${l.L_DisplayId}`,
+    `${num(l.DaysOnMarket)} days on market${extras ? " | " + extras : ""} | ${num(l.PhotoCount)} photos | MLS# ${l.L_DisplayId}`,
   ].join("\n");
 }
 

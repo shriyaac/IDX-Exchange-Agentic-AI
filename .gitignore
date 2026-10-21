@@ -10,3 +10,4 @@ openclaw-docker/openclaw-state/
 openclaw-docker/openclaw-secrets/
 mysql-log.txt
 .DS_Store
+openclaw-docker/workspace/idx/sessions/
