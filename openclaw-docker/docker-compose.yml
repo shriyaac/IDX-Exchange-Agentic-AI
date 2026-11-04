@@ -13,7 +13,8 @@
 
 services:
   openclaw-gateway:
-    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}   # prebuilt; no 6GB local build
+    image: idx-openclaw-python:local   # OpenClaw + Python, built from python-image/Dockerfile
+    build: ./python-image
     environment:
       HOME: /home/node
       OPENCLAW_HOME: /home/node
@@ -77,7 +78,8 @@ services:
   # One-off CLI container for onboarding, channel login, status, etc.
   #   docker compose run --rm openclaw-cli <command>
   openclaw-cli:
-    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
+    image: idx-openclaw-python:local   # OpenClaw + Python, built from python-image/Dockerfile
+    build: ./python-image
     profiles: ["cli"]                 # not started by "docker compose up"
     network_mode: "service:openclaw-gateway"
     environment:
