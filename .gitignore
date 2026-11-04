@@ -11,3 +11,4 @@ openclaw-docker/openclaw-secrets/
 mysql-log.txt
 .DS_Store
 openclaw-docker/workspace/idx/sessions/
+openclaw-docker/workspace/idx/embeddings/
