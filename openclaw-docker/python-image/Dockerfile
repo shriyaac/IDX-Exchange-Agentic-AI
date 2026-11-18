@@ -6,5 +6,5 @@ RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3-pip \
  && rm -rf /var/lib/apt/lists/* \
  && python3 -m pip install --no-cache-dir --break-system-packages \
-      pandas numpy sqlalchemy mysql-connector-python scikit-learn openai
+      pandas numpy sqlalchemy mysql-connector-python scikit-learn openai pypdf
 USER node
